@@ -12,7 +12,6 @@ import { readFileUtil } from '../utils/readFileUtil';
 
 const fileLines = [];
 let code;
-let pointer = 0;
 
 const onLine = (line) => {
   fileLines.push(line);
@@ -24,81 +23,79 @@ const onClose = () => {
 
 readFileUtil(onLine, onClose);
 
-const OPCODES = {
-  1: '+',
-  2: '*',
-  99: 'halt',
-};
-
 const processReadLines = () => {
   fileLines.forEach(line => {
     code = line.split(',');
   });
 
-  console.log(`Part 1: ${part1()}`); // 3101844
-  console.log(`Part 2: ${part2()}`); // 8478
+  let hrStart;
+  let hrEnd;
+
+  console.log('\n--- Part 1 ---');
+  hrStart = process.hrtime();
+  console.log(`Answer: ${part1()}`); // 3101844
+  hrEnd = process.hrtime(hrStart);
+  console.info('Execution time (hr): %ds %dms', hrEnd[0], hrEnd[1] / 1000000);
+
+  console.log('\n--- Part 2 ---');
+  hrStart = process.hrtime();
+  console.log(`Answer: ${part2()}`); // 8478
+  hrEnd = process.hrtime(hrStart);
+  console.info('Execution time (hr): %ds %dms', hrEnd[0], hrEnd[1] / 1000000);
+
+  console.log('\n--------------');
 };
 
-const runComputer = (code) => {
-  // console.log(JSON.stringify(code));
+const OPCODES = {
+  1: { operation: '+', arity: 3 },
+  2: { operation: '*', arity: 3 },
+  99: { operation: 'halt', arity: 0 },
+};
 
-  pointer = 0;
-  while (true) {
-    const opcode = parseInt(code[pointer]);
-    if (isNaN(opcode)) {
-      console.log(`Not a number: ${code[pointer]} (pointer: ${pointer})`);
-      continue;
-    }
+const runComputer = (code, pointer = 0) => {
+  const opcode = code[pointer];
 
-    if (opcode === 99) {
-      // console.log(`Will halt. Value at position 0: ${code[0]}`);
-      pointer += 1; // 1 opcode
-      return code[0];
-    }
-
-    if (opcode === 1 || opcode === 2) {
-      const val1Address = code[pointer + 1];
-      const val2Address = code[pointer + 2];
-      let resultAddress = code[pointer + 3];
-      let val1Parameter = code[val1Address];
-      let val2Parameter = code[val2Address];
-
-      code[resultAddress] = eval(`${val1Parameter} ${OPCODES[opcode]} ${val2Parameter}`);
-      pointer += 4; // 1 opcode + 3 parameters
-      continue;
-    }
-
-    console.log(`Invalid opcode: ${code[pointer]}`);
-    return;
+  if (!Object.keys(OPCODES).includes(opcode)) {
+    throw new Error(`Invalid opcode: ${opcode} (pointer: ${pointer})`);
   }
+
+  const instruction = OPCODES[opcode];
+
+  if (instruction.operation === 'halt') {
+    return code[0];
+  }
+
+  let evalString = code[code[pointer + 1]]; // start with the first parameter
+  for (let i = 2; i < instruction.arity; i += 1) {
+    evalString = `${evalString}${instruction.operation}${code[code[pointer + i]]}`; // add the remaining parameters
+  }
+  code[code[pointer + instruction.arity]] = eval(evalString); // save the result at the address of the last parameter
+
+  return runComputer(code, pointer + 1 + instruction.arity); // continue increment the instruction pointer by 1 opcode + x parameters
 };
 
 const part1 = () => {
-  let inputA = 12;
-  let inputB = 2;
+  const inputA = '12';
+  const inputB = '2';
   return runComputer([...code.slice(0, 1), inputA, inputB, ...code.slice(3)]);
 };
 
 const part2 = () => {
   /**
-   * determine what pair of inputs produces the output 19690720
-   */
-  let noun = 0; // 0 to 99
-  let verb = 0; // 0 to 99
-  const expectedOutput = 19690720;
-
-  /**
    * Find the input noun and verb that cause the program to produce the output 19690720.
    * What is 100 * noun + verb? (For example, if noun=12 and verb=2, the answer would be 1202.)
    */
-  for (noun = 0; noun < 100; noun += 1) {
-    for (verb = 0; verb < 100; verb += 1) {
-      if (runComputer([...code.slice(0, 1), noun, verb, ...code.slice(3)]) === expectedOutput) {
-        console.log(`Found noun and verb: ${noun} ${verb}`);
-        const answer = 100 * noun + verb;
-        console.log(`Answer is: ${answer}`);
-        return answer;
+  const expectedOutput = 19690720;
+
+  const runLoopsUntilAnswerIsFound = ({ nounCfg = { min: 0, max: 99 }, verbCfg = { min: 0, max: 99 }, expectedOutput }) => {
+    for (let noun = nounCfg.min; noun < nounCfg.max; noun += 1) {
+      for (let verb = verbCfg.min; verb < verbCfg.max; verb += 1) {
+        if (runComputer([...code.slice(0, 1), noun, verb, ...code.slice(3)]) === expectedOutput) {
+          return `${100 * noun + verb} (noun: ${noun}, verb: ${verb})`;
+        }
       }
     }
-  }
+  };
+
+  return runLoopsUntilAnswerIsFound({ expectedOutput });
 };
